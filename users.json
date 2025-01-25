@@ -4,5 +4,11 @@
         "email": "zzz@gmail.com",
         "password": "jocker",
         "created_at": "2025-01-25T09:36:28.511328"
+    },
+    {
+        "name": "zaza",
+        "email": "zaza@gmail.com",
+        "password": "zaza",
+        "created_at": "2025-01-25T09:41:56.773629"
     }
 ]
