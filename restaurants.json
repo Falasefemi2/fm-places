@@ -1,1 +1,9 @@
-[]
+[
+    {
+        "name": "Pizza hut",
+        "menus": {
+            "Pizza": 23.33
+        },
+        "availability": true
+    }
+]
