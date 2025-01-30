@@ -19,5 +19,12 @@
             "Wedding cake": 300
         },
         "availability": true
+    },
+    {
+        "name": "Mum femi store",
+        "menus": {
+            "Rice": 30
+        },
+        "availability": true
     }
 ]

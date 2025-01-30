@@ -10,7 +10,7 @@ class User:
     def __init__(self, name: str, email: str, password: str) -> None:
         self.name = name
         self.email = email
-        self.password = self.hash_password(password)  # Hash the password before storing
+        self.password = self.hash_password(password)
         self.created_at = datetime.now()
 
     @staticmethod
@@ -28,7 +28,7 @@ class User:
         return {
             "name": self.name,
             "email": self.email,
-            "password": self.password,  # Hashed password
+            "password": self.password,
             "created_at": self.created_at.isoformat()
         }
 
@@ -36,7 +36,6 @@ class User:
     def from_dict(cls, data: Dict) -> 'User':
         """Create user from dictionary"""
         user = cls(data['name'], data['email'], data['password'])
-        user.password = data['password']  # Prevent re-hashing the already hashed password
         user.created_at = datetime.fromisoformat(data['created_at'])
         return user
 
@@ -51,7 +50,7 @@ class User:
         for user in users:
             if user.email == email and user.check_password(password):
                 return user
-        return None  # Could also raise an error like: raise ValueError("Invalid credentials")
+        return None
 
     @staticmethod
     def save_users(users: List['User'], filename: str = 'users.json') -> None:
@@ -73,13 +72,12 @@ class User:
             return []
 
 
-
 class Restaurant:
     """Registration for restaurants"""
 
     def __init__(self, name: str, menus: Dict[str, Dict[str, float]], availability: bool = True) -> None:
         self.name = name
-        self.menus = menus  # Nested dictionary: {menu_type: {item: price}}
+        self.menus = menus
         self.availability = availability
 
     def to_dict(self) -> Dict:
@@ -137,12 +135,15 @@ class Restaurant:
         print(f"📌 Status: {'🟢 Open' if self.availability else '🔴 Closed'}")
         print("-" * 40)
         print("📜 Menus:")
+        # Assuming self.menus is a dictionary like {'breakfast': {'item1': price1, ...}, ...}
         for menu_type, items in self.menus.items():
             print(f"  🍱 {menu_type.capitalize()}:")
-            for item, price in items.items():
-                print(f"    - {item}: ${price:.2f}")
+            if isinstance(items, dict):
+                for item, price in items.items():
+                    print(f"    - {item}: ${price:.2f}")
+            else:
+                print(f"    - Invalid menu format for {menu_type}")
         print("=" * 40)
-
 
 
 class Order:
@@ -152,7 +153,7 @@ class Order:
                  status: str = 'pending', driver_email: Optional[str] = None) -> None:
         self.user_email = user_email
         self.restaurant_name = restaurant_name
-        self.items = items  # { "Burger": 2, "Pizza": 1 }
+        self.items = items
         self.status = status
         self.driver_email = driver_email
         self.orderAt = datetime.now()
@@ -165,7 +166,7 @@ class Order:
             "items": self.items,
             "status": self.status,
             "driver_email": self.driver_email,
-            "orderAt": self.orderAt.isoformat()  # Convert datetime to string
+            "orderAt": self.orderAt.isoformat()
         }
 
     @classmethod
@@ -178,17 +179,15 @@ class Order:
             data.get('status', 'pending'),
             data.get('driver_email')
         )
-        order.orderAt = datetime.fromisoformat(data['orderAt'])  # Convert string back to datetime
+        order.orderAt = datetime.fromisoformat(data['orderAt'])
         return order
 
     @staticmethod
     def save_order(orders: List['Order'], file_name: str = 'orders.json') -> None:
         """Save orders to a JSON file"""
         try:
-            existing_orders = Order.load_order(file_name)
-            existing_orders.extend(orders)  # Append new orders
             with open(file_name, "w", encoding="utf-8") as file:
-                json.dump([order.to_dict() for order in existing_orders], file, indent=4)
+                json.dump([order.to_dict() for order in orders], file, indent=4)
         except Exception as e:
             print(f"Error saving orders: {e}")
 
@@ -210,7 +209,7 @@ class Order:
         self.status = status
         return f"Order status updated to: {self.status}"
 
-    def display_receipt(self, user: 'User', restaurant: 'Restaurant') -> None:
+    def display_receipt(self, user: User, restaurant: Restaurant) -> None:
         """Display order receipt"""
         print("\n--- RECEIPT ---")
         print(f"👤 Customer: {user.name}")
@@ -218,11 +217,8 @@ class Order:
         print("🍽️ Ordered Items:")
 
         total_price = 0
-
         for item, quantity in self.items.items():
             item_price = None
-
-            # Search for item price in restaurant menus
             for menu in restaurant.menus.values():
                 if item in menu:
                     item_price = menu[item]
@@ -255,7 +251,7 @@ class Driver:
         return {
             "name": self.name,
             "email": self.email,
-            "orders": [order.to_dict() for order in self.orders],  # Convert orders to dict
+            "orders": [order.to_dict() for order in self.orders],
             "available": self.available
         }
 
@@ -263,7 +259,7 @@ class Driver:
     def from_dict(cls, data: Dict) -> 'Driver':
         """Load driver from dictionary"""
         driver = cls(data['name'], data['email'])
-        driver.orders = [Order.from_dict(order_data) for order_data in data.get('orders', [])]  # Convert dicts back to Order objects
+        driver.orders = [Order.from_dict(order_data) for order_data in data.get('orders', [])]
         driver.available = data.get('available', True)
         return driver
     
@@ -271,10 +267,8 @@ class Driver:
     def save_driver(drivers: List['Driver'], file_name: str = 'drivers.json') -> None:
         """Save driver list to a JSON file"""
         try:
-            existing_drivers = Driver.load_driver(file_name)
-            existing_drivers.extend(drivers)  # Append new drivers
             with open(file_name, "w", encoding="utf-8") as file:
-                json.dump([driver.to_dict() for driver in existing_drivers], file, indent=4)
+                json.dump([driver.to_dict() for driver in drivers], file, indent=4)
         except Exception as e:
             print(f"Error saving drivers: {e}")
 
@@ -299,8 +293,8 @@ class Driver:
         
         self.available = False
         self.orders.append(order)
-        order.status = "Assigned"
-        order.driver_email = self.email  # Track the driver assigned to this order
+        order.status = "assigned"
+        order.driver_email = self.email
         print(f"✅ Order for {order.restaurant_name} assigned to driver {self.name}.")
 
     def complete_order(self) -> None:
@@ -309,11 +303,12 @@ class Driver:
             print(f"🚫 Driver {self.name} has no active orders to complete.")
             return
 
-        order = self.orders.pop()  # Remove the last order
-        order.status = "Delivered"
-        self.available = True  # Mark driver as available again
-
+        order = self.orders.pop()
+        order.status = "delivered"
+        self.available = True
         print(f"✅ Order from '{order.restaurant_name}' delivered by driver '{self.name}'.")
+
+
         
 
 class Admin:
@@ -360,7 +355,7 @@ class Admin:
         self.users.append(new_user)
         print(f"✅ User '{name}' added successfully!")
 
-    def add_restaurant(self, name: str, menus: Dict[str, float], availability: bool = True):
+    def add_restaurant(self, name: str, menus: Dict[str, Dict[str, float]], availability: bool = True):
         """Add a new restaurant"""
         if any(r.name == name for r in self.restaurants):
             print(f"🚫 Restaurant '{name}' already exists.")
@@ -427,20 +422,37 @@ class Admin:
             print(f"👤 Driver: {driver.name}, Email: {driver.email}, Status: {status}")
 
     def place_order(self, user_email: str, restaurant_name: str, items: Dict[str, int]) -> None:
-        """Place an order"""
+        """Place an order with item validation"""
         restaurant = next((r for r in self.restaurants if r.name == restaurant_name and r.availability), None)
         if not restaurant:
             print(f"🚫 Restaurant '{restaurant_name}' is not available!")
             return
 
-        total_price = sum(restaurant.menus.get(item, 0) * quantity for item, quantity in items.items())
-        order = Order(user_email, restaurant_name, items)
+        total_price = 0
+        valid_items = {}
+        for item, quantity in items.items():
+            item_price = None
+            for menu in restaurant.menus.values():
+                if item in menu:
+                    item_price = menu[item]
+                    break
+            if item_price is None:
+                print(f"🚫 Item '{item}' not found in {restaurant.name}'s menu")
+                continue
+            valid_items[item] = quantity
+            total_price += item_price * quantity
+
+        if not valid_items:
+            print("🚫 No valid items in order!")
+            return
+
+        order = Order(user_email, restaurant_name, valid_items)
         self.orders.append(order)
         print(f"✅ Order placed successfully! Total: ${total_price:.2f}")
 
     def assign_order_to_driver(self) -> None:
-        """Assign pending orders to available drivers using a round-robin approach"""
-        pending_orders = [order for order in self.orders if order.status == "Pending"]
+        """Assign pending orders to available drivers"""
+        pending_orders = [order for order in self.orders if order.status == "pending"]
         available_drivers = [driver for driver in self.drivers if driver.available]
 
         if not pending_orders:
@@ -451,11 +463,11 @@ class Admin:
             print("🚫 No available drivers!")
             return
 
-        # Assign orders to drivers in a round-robin fashion
         for i, order in enumerate(pending_orders):
             driver = available_drivers[i % len(available_drivers)]
             driver.assign_order(order)
             print(f"✅ Order from '{order.restaurant_name}' assigned to driver '{driver.name}'.")
+
 
     def complete_order(self, driver_email: str) -> None:
         """Complete the last order assigned to a driver"""
@@ -562,6 +574,7 @@ def main():
 
         elif choice == "5":
             admin.list_restaurants()
+        
 
         elif choice == "7":
             admin.assign_order_to_driver()
