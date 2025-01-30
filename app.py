@@ -1,49 +1,64 @@
 import json
+import bcrypt
 from typing import Optional, List, Dict
 from datetime import datetime
 
+
 class User:
-    """Registration of users"""
+    """User Registration and Authentication"""
+
     def __init__(self, name: str, email: str, password: str) -> None:
         self.name = name
         self.email = email
-        self.password = password
+        self.password = self.hash_password(password)  # Hash the password before storing
         self.created_at = datetime.now()
-    
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash password using bcrypt"""
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode(), salt).decode()
+
+    def check_password(self, password: str) -> bool:
+        """Verify password"""
+        return bcrypt.checkpw(password.encode(), self.password.encode())
+
     def to_dict(self) -> Dict:
         """Convert user to dictionary for JSON serialization"""
         return {
             "name": self.name,
             "email": self.email,
-            "password": self.password,
+            "password": self.password,  # Hashed password
             "created_at": self.created_at.isoformat()
         }
-        
-    @staticmethod
-    def login(email: str, password: str, users: List['User']) -> Optional['User']:
-        """Login user"""
-        if not users:
-            raise ValueError("No users available")
-        if not email or not password:
-            raise ValueError('Email and password are required')
-        for user in users:
-            if user.email == email and user.password == password:
-                return user
-        return None
-    
+
     @classmethod
     def from_dict(cls, data: Dict) -> 'User':
         """Create user from dictionary"""
         user = cls(data['name'], data['email'], data['password'])
+        user.password = data['password']  # Prevent re-hashing the already hashed password
         user.created_at = datetime.fromisoformat(data['created_at'])
         return user
-    
+
+    @staticmethod
+    def login(email: str, password: str, users: List['User']) -> Optional['User']:
+        """Authenticate user login"""
+        if not users:
+            raise ValueError("No users available")
+        if not email or not password:
+            raise ValueError('Email and password are required')
+
+        for user in users:
+            if user.email == email and user.check_password(password):
+                return user
+        return None  # Could also raise an error like: raise ValueError("Invalid credentials")
+
     @staticmethod
     def save_users(users: List['User'], filename: str = 'users.json') -> None:
         """Save users to JSON file"""
         with open(filename, 'w', encoding="utf-8") as f:
             json.dump([user.to_dict() for user in users], f, indent=4)
-    
+
     @staticmethod
     def load_users(filename: str = 'users.json') -> List['User']:
         """Load users from JSON file"""
@@ -53,9 +68,15 @@ class User:
                 return [User.from_dict(data) for data in user_data]
         except FileNotFoundError:
             return []
+        except json.JSONDecodeError:
+            print("Error: Corrupted users.json file")
+            return []
+
+
 
 class Restaurant:
-    """Restaurant with multiple menus"""
+    """Registration for restaurants"""
+
     def __init__(self, name: str, menus: Dict[str, Dict[str, float]], availability: bool = True) -> None:
         self.name = name
         self.menus = menus  # Nested dictionary: {menu_type: {item: price}}
@@ -71,285 +92,393 @@ class Restaurant:
 
     @classmethod
     def from_dict(cls, data: Dict) -> 'Restaurant':
-        """Create restaurant from dictionary, handle missing menus key."""
-        menus = data.get('menus', {})  # Default to an empty dictionary if 'menus' key is missing
+        """Create Restaurant instance from dictionary"""
+        menus = data.get('menus', {})
         return cls(data['name'], menus, data['availability'])
 
-    def update_menu(self, menu_type: str, new_menu: Dict[str, float]) -> None:
+    @staticmethod
+    def save_restaurants(restaurants: List['Restaurant'], file_name: str = 'restaurants.json') -> None:
+        """Save restaurants to a JSON file"""
+        try:
+            with open(file_name, "w", encoding="utf-8") as file:
+                json.dump([restaurant.to_dict() for restaurant in restaurants], file, indent=4)
+        except Exception as e:
+            print(f"Error saving data: {e}")
+
+    @staticmethod
+    def load_restaurants(file_name: str = 'restaurants.json') -> List['Restaurant']:
+        """Load restaurants from a JSON file"""
+        try:
+            with open(file_name, "r", encoding="utf-8") as file:
+                restaurant_data = json.load(file)
+                return [Restaurant.from_dict(data) for data in restaurant_data]
+        except FileNotFoundError:
+            return []
+        except json.JSONDecodeError:
+            print("Error: Corrupted JSON file.")
+            return []
+
+    def update_menu(self, menu_type: str, new_menu: Dict[str, float]) -> str:
         """Update or add a specific menu type"""
         self.menus[menu_type] = new_menu
-        print(f"Menu '{menu_type}' updated for '{self.name}'.")
+        return f"Menu '{menu_type}' updated for '{self.name}'."
 
-    def remove_menu(self, menu_type: str) -> None:
+    def remove_menu(self, menu_type: str) -> str:
         """Remove a specific menu type"""
         if menu_type in self.menus:
             del self.menus[menu_type]
-            print(f"Menu '{menu_type}' removed from '{self.name}'.")
-        else:
-            print(f"Menu '{menu_type}' not found in '{self.name}'.")
+            return f"Menu '{menu_type}' removed from '{self.name}'."
+        return f"Menu '{menu_type}' not found in '{self.name}'."
 
     def display_info(self) -> None:
         """Display restaurant information"""
-        print(f"Restaurant: {self.name}")
-        print(f"Availability: {'Open' if self.availability else 'Closed'}")
-        print("Menus:")
+        print("=" * 40)
+        print(f"🍽️ Restaurant: {self.name}")
+        print(f"📌 Status: {'🟢 Open' if self.availability else '🔴 Closed'}")
+        print("-" * 40)
+        print("📜 Menus:")
         for menu_type, items in self.menus.items():
-            print(f" {menu_type.capitalize()}:")
+            print(f"  🍱 {menu_type.capitalize()}:")
             for item, price in items.items():
-                print(f"  - {item}: ${price:.2f}")
+                print(f"    - {item}: ${price:.2f}")
+        print("=" * 40)
+
+
 
 class Order:
-    def __init__(self, user_email: str, restaurant_name: str, items: Dict[str, int], status: str = "Pending", driver_email: Optional[str] = None):
+    """Take customer order"""
+
+    def __init__(self, user_email: str, restaurant_name: str, items: Dict[str, int], 
+                 status: str = 'pending', driver_email: Optional[str] = None) -> None:
         self.user_email = user_email
         self.restaurant_name = restaurant_name
-        self.items = items
+        self.items = items  # { "Burger": 2, "Pizza": 1 }
         self.status = status
         self.driver_email = driver_email
-        self.created_at = datetime.now()
+        self.orderAt = datetime.now()
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
+        """Convert order to dictionary for JSON serialization"""
         return {
             "user_email": self.user_email,
             "restaurant_name": self.restaurant_name,
             "items": self.items,
             "status": self.status,
             "driver_email": self.driver_email,
-            "created_at": self.created_at.isoformat(),
+            "orderAt": self.orderAt.isoformat()  # Convert datetime to string
         }
 
     @classmethod
-    def from_dict(cls, data):
-        order = cls(data["user_email"], data["restaurant_name"], data["items"], data["status"], data.get("driver_email"))
-        order.created_at = datetime.fromisoformat(data["created_at"])
+    def from_dict(cls, data: Dict) -> 'Order':
+        """Load order from dictionary"""
+        order = cls(
+            data['user_email'],
+            data['restaurant_name'],
+            data['items'],
+            data.get('status', 'pending'),
+            data.get('driver_email')
+        )
+        order.orderAt = datetime.fromisoformat(data['orderAt'])  # Convert string back to datetime
         return order
 
-    def update_status(self, status: str) -> None:
-        """Update the status of the order."""
-        self.status = status
+    @staticmethod
+    def save_order(orders: List['Order'], file_name: str = 'orders.json') -> None:
+        """Save orders to a JSON file"""
+        try:
+            existing_orders = Order.load_order(file_name)
+            existing_orders.extend(orders)  # Append new orders
+            with open(file_name, "w", encoding="utf-8") as file:
+                json.dump([order.to_dict() for order in existing_orders], file, indent=4)
+        except Exception as e:
+            print(f"Error saving orders: {e}")
 
-    def display_receipt(self, user: User, restaurant: Restaurant) -> None:
-        """Display the receipt for the order."""
-        print("\n--- Receipt ---")
-        print(f"Customer: {user.name}")
-        print(f"Restaurant: {restaurant.name}")
-        print("Items:")
+    @staticmethod
+    def load_order(file_name: str = 'orders.json') -> List['Order']:
+        """Load orders from a JSON file"""
+        try:
+            with open(file_name, "r", encoding="utf-8") as file:
+                order_data = json.load(file)
+                return [Order.from_dict(data) for data in order_data]
+        except FileNotFoundError:
+            return []
+        except json.JSONDecodeError:
+            print("Error: Corrupted JSON file.")
+            return []
+
+    def update_status(self, status: str) -> str:
+        """Update order status"""
+        self.status = status
+        return f"Order status updated to: {self.status}"
+
+    def display_receipt(self, user: 'User', restaurant: 'Restaurant') -> None:
+        """Display order receipt"""
+        print("\n--- RECEIPT ---")
+        print(f"👤 Customer: {user.name}")
+        print(f"🏪 Restaurant: {restaurant.name}")
+        print("🍽️ Ordered Items:")
+
         total_price = 0
+
         for item, quantity in self.items.items():
-            price = restaurant.menus.get(item, {}).get('price', 0) * quantity
-            total_price += price
-            print(f"  - {item}: {quantity} x ${restaurant.menus.get(item, {}).get('price', 0):.2f} = ${price:.2f}")
-        print(f"Total: ${total_price:.2f}")
-        print(f"Status: {self.status}")
-        print(f"Ordered at: {self.created_at}")
-        print("---------------\n")
+            item_price = None
+
+            # Search for item price in restaurant menus
+            for menu in restaurant.menus.values():
+                if item in menu:
+                    item_price = menu[item]
+                    break
+
+            if item_price is not None:
+                price = item_price * quantity
+                total_price += price
+                print(f"  - {item}: {quantity} x ${item_price:.2f} = ${price:.2f}")
+            else:
+                print(f"  - {item}: Not found in {restaurant.name}")
+
+        print(f"💰 Total: ${total_price:.2f}")
+        print(f"📌 Status: {self.status.capitalize()}")
+        print(f"📅 Ordered at: {self.orderAt.strftime('%Y-%m-%d %H:%M:%S')}")
+        print("----------------\n")
+
 
 class Driver:
-    def __init__(self, name: str, email: str):
+    """Class for drivers"""
+    
+    def __init__(self, name: str, email: str) -> None:
         self.name = name
         self.email = email
-        self.orders = []  # List of order IDs
+        self.orders: List[Order] = []
         self.available = True
 
-    def to_dict(self):
+    def to_dict(self) -> Dict:
+        """Convert driver to dictionary for JSON serialization"""
         return {
             "name": self.name,
             "email": self.email,
-            "orders": self.orders,
-            "available": self.available,
+            "orders": [order.to_dict() for order in self.orders],  # Convert orders to dict
+            "available": self.available
         }
 
     @classmethod
-    def from_dict(cls, data):
-        driver = cls(data["name"], data["email"])
-        driver.orders = data["orders"]
-        driver.available = data["available"]
+    def from_dict(cls, data: Dict) -> 'Driver':
+        """Load driver from dictionary"""
+        driver = cls(data['name'], data['email'])
+        driver.orders = [Order.from_dict(order_data) for order_data in data.get('orders', [])]  # Convert dicts back to Order objects
+        driver.available = data.get('available', True)
         return driver
+    
+    @staticmethod
+    def save_driver(drivers: List['Driver'], file_name: str = 'drivers.json') -> None:
+        """Save driver list to a JSON file"""
+        try:
+            existing_drivers = Driver.load_driver(file_name)
+            existing_drivers.extend(drivers)  # Append new drivers
+            with open(file_name, "w", encoding="utf-8") as file:
+                json.dump([driver.to_dict() for driver in existing_drivers], file, indent=4)
+        except Exception as e:
+            print(f"Error saving drivers: {e}")
+
+    @staticmethod
+    def load_driver(file_name: str = 'drivers.json') -> List['Driver']:
+        """Load drivers from a JSON file"""
+        try:
+            with open(file_name, "r", encoding="utf-8") as file:
+                driver_data = json.load(file)
+                return [Driver.from_dict(data) for data in driver_data]
+        except FileNotFoundError:
+            return []
+        except json.JSONDecodeError:
+            print("Error: Corrupted JSON file.")
+            return []
 
     def assign_order(self, order: Order) -> None:
-        """Assign an order to the driver."""
+        """Assign an order to the driver"""
+        if not self.available:
+            print(f"🚫 Driver {self.name} is not available to take new orders.")
+            return
+        
         self.available = False
         self.orders.append(order)
-        order.update_status("Assigned")
-        print(f"Order for '{order.restaurant_name}' assigned to driver '{self.name}'.")
+        order.status = "Assigned"
+        order.driver_email = self.email  # Track the driver assigned to this order
+        print(f"✅ Order for {order.restaurant_name} assigned to driver {self.name}.")
 
     def complete_order(self) -> None:
-        """Complete the current order."""
-        self.available = True
-        if self.orders:
-            order = self.orders.pop(0)
-            order.update_status("Delivered")
-            print(f"Order for '{order.restaurant_name}' completed by driver '{self.name}'.")
+        """Complete the last assigned order"""
+        if not self.orders:
+            print(f"🚫 Driver {self.name} has no active orders to complete.")
+            return
+
+        order = self.orders.pop()  # Remove the last order
+        order.status = "Delivered"
+        self.available = True  # Mark driver as available again
+
+        print(f"✅ Order from '{order.restaurant_name}' delivered by driver '{self.name}'.")
+        
 
 class Admin:
-    """Admin class"""
     def __init__(self) -> None:
         self.restaurants: List[Restaurant] = []
         self.users: List[User] = []
-        self.orders: List[Order] = []  # List to manage orders
-        self.drivers: List[Driver] = []  # List to manage drivers
+        self.orders: List[Order] = []
+        self.drivers: List[Driver] = []
 
-    def save_data(self, restaurants_file: str = 'restaurants.json', 
-                  users_file: str = 'users.json', orders_file: str = 'orders.json', 
-                  drivers_file: str = 'drivers.json') -> None:
-        """Save restaurants, users, orders, and drivers to JSON files"""
-        with open(restaurants_file, 'w', encoding="utf-8") as f:
-            json.dump([restaurant.to_dict() for restaurant in self.restaurants], f, indent=4)
-        
-        User.save_users(self.users, users_file)
+    def save_data(
+        self, 
+        user_file: str = 'users.json', 
+        restaurant_file: str = 'restaurants.json', 
+        order_file: str = 'orders.json', 
+        driver_file: str = 'drivers.json'
+    ):
+        """Save all data to JSON files"""
+        User.save_users(self.users, user_file)
+        Restaurant.save_restaurants(self.restaurants, restaurant_file)
+        Order.save_order(self.orders, order_file)
+        Driver.save_driver(self.drivers, driver_file)
+        print("✅ Data saved successfully!")
 
-        with open(orders_file, 'w', encoding="utf-8") as f:
-            json.dump([order.to_dict() for order in self.orders], f, indent=4)
-
-        with open(drivers_file, 'w', encoding="utf-8") as f:
-            json.dump([driver.to_dict() for driver in self.drivers], f, indent=4)
-
-        print("Data saved successfully.")
-
-    def load_data(self, restaurants_file: str = 'restaurants.json', 
-                  users_file: str = 'users.json', orders_file: str = 'orders.json', 
-                  drivers_file: str = 'drivers.json') -> None:
-        """Load restaurants, users, orders, and drivers from JSON files"""
-        try:
-            with open(restaurants_file, 'r', encoding="utf-8") as f:
-                restaurant_data = json.load(f)
-                self.restaurants = [Restaurant.from_dict(data) for data in restaurant_data]
-            print(f"Loaded {len(self.restaurants)} restaurants.")
-        except FileNotFoundError:
-            print("No saved restaurants found.")
-
-        try:
-            self.users = User.load_users(users_file)
-            print(f"Loaded {len(self.users)} users.")
-        except FileNotFoundError:
-            print("No saved users found.")
-
-        try:
-            with open(orders_file, 'r', encoding="utf-8") as f:
-                order_data = json.load(f)
-                self.orders = [Order.from_dict(data) for data in order_data]
-            print(f"Loaded {len(self.orders)} orders.")
-        except FileNotFoundError:
-            print("No saved orders found.")
-
-        try:
-            with open(drivers_file, 'r', encoding="utf-8") as f:
-                driver_data = json.load(f)
-                self.drivers = [Driver.from_dict(data) for data in driver_data]
-            print(f"Loaded {len(self.drivers)} drivers.")
-        except FileNotFoundError:
-            print("No saved drivers found.")
+    def load_data(
+        self, 
+        user_file: str = 'users.json', 
+        restaurant_file: str = 'restaurants.json', 
+        order_file: str = 'orders.json', 
+        driver_file: str = 'drivers.json'
+    ):
+        """Load all data from JSON files"""
+        self.users = User.load_users(user_file)
+        self.restaurants = Restaurant.load_restaurants(restaurant_file)
+        self.orders = Order.load_order(order_file)
+        self.drivers = Driver.load_driver(driver_file)
+        print("✅ Data loaded successfully!")
 
     def add_user(self, name: str, email: str, password: str) -> None:
-        """Add a user"""
+        """Add a new user"""
+        if any(user.email == email for user in self.users):
+            print(f"🚫 User with email {email} already exists.")
+            return
         new_user = User(name, email, password)
         self.users.append(new_user)
-        print(f"User '{name}' registered successfully!")
+        print(f"✅ User '{name}' added successfully!")
 
-    def add_restaurant(self, name: str, menu: Dict[str, float], 
-                       availability: bool = True) -> None:
-        """Add restaurant"""
-        new_restaurant = Restaurant(name, menu, availability)
+    def add_restaurant(self, name: str, menus: Dict[str, float], availability: bool = True):
+        """Add a new restaurant"""
+        if any(r.name == name for r in self.restaurants):
+            print(f"🚫 Restaurant '{name}' already exists.")
+            return
+        new_restaurant = Restaurant(name, menus, availability)
         self.restaurants.append(new_restaurant)
-        print(f"Restaurant '{name}' added successfully!!")
-        
-    def update_restaurant_menu(self, restaurant_name: str, 
-                                new_menu: Dict[str, float]) -> None:
-        """Update restaurant menu"""
-        for restaurant in self.restaurants:
-            if restaurant.name == restaurant_name:
-                restaurant.update_menu(new_menu)
-                print(f"Menu updated for '{restaurant.name}'.")
-                return
-        print(f"Restaurant '{restaurant_name}' not found")
-    
+        print(f"✅ Restaurant '{name}' added successfully!")
+
+    def add_driver(self, name: str, email: str):
+        """Add a new driver"""
+        if any(d.email == email for d in self.drivers):
+            print(f"🚫 Driver with email {email} already exists.")
+            return
+        new_driver = Driver(name, email)
+        self.drivers.append(new_driver)
+        print(f"✅ Driver '{name}' added successfully!")
+
+    def update_restaurant_menu(self, restaurant_name: str, new_menu: Dict[str, float]) -> None:
+        """Update a restaurant's menu"""
+        restaurant = next((r for r in self.restaurants if r.name == restaurant_name), None)
+        if not restaurant:
+            print(f"🚫 Restaurant '{restaurant_name}' not found!")
+            return
+        restaurant.update_menu(new_menu)
+        print(f"✅ Menu updated for '{restaurant_name}'.")
+
+    def remove_restaurant(self, restaurant_name: str) -> None:
+        """Remove a restaurant"""
+        self.restaurants = [r for r in self.restaurants if r.name != restaurant_name]
+        print(f"✅ Restaurant '{restaurant_name}' removed.")
+
     def update_availability(self, restaurant_name: str, availability: bool) -> None:
         """Update restaurant availability"""
-        for restaurant in self.restaurants:
-            if restaurant.name == restaurant_name:
-                restaurant.availability = availability
-                print(f"Availability updated for '{restaurant_name}'.")
-                return
-        print(f"Restaurant '{restaurant_name}' not found")
-        
-    def remove_restaurant(self, restaurant_name: str) -> None:
-        """Remove restaurant"""
-        for restaurant in self.restaurants:
-            if restaurant.name == restaurant_name:
-                self.restaurants.remove(restaurant)
-                print(f"Restaurant '{restaurant_name}' removed successfully.")
-                return
-        print(f"Restaurant '{restaurant_name}' not found")
-    
-    def list_restaurants(self):
+        restaurant = next((r for r in self.restaurants if r.name == restaurant_name), None)
+        if not restaurant:
+            print(f"🚫 Restaurant '{restaurant_name}' not found!")
+            return
+        restaurant.availability = availability
+        print(f"✅ Availability updated for '{restaurant_name}'.")
+
+    def list_users(self) -> None:
+        """List all users"""
+        if not self.users:
+            print("🚫 No users available!")
+            return
+        for user in self.users:
+            print(f"👤 User: {user.name}, Email: {user.email}")
+
+    def list_restaurants(self) -> None:
         """List all restaurants"""
         if not self.restaurants:
-            print("No available restaurants")
-        else:
-            for restaurant in self.restaurants:
-                restaurant.display_info()
-
-    def add_driver(self, name: str, email: str) -> None:
-        """Add a delivery driver."""
-        driver = Driver(name, email)
-        self.drivers.append(driver)
-        print(f"Driver '{name}' added successfully!")
+            print("🚫 No restaurants available!")
+            return
+        for restaurant in self.restaurants:
+            restaurant.display_info()
 
     def list_drivers(self) -> None:
-        """List all drivers."""
+        """List all drivers"""
+        if not self.drivers:
+            print("🚫 No drivers available!")
+            return
         for driver in self.drivers:
             status = "Available" if driver.available else "Delivering"
-            print(f"Driver: {driver.name}, Email: {driver.email}, Status: {status}")
+            print(f"👤 Driver: {driver.name}, Email: {driver.email}, Status: {status}")
 
     def place_order(self, user_email: str, restaurant_name: str, items: Dict[str, int]) -> None:
-        """Place a new order."""
-        # Find the restaurant
-        restaurant = next((r for r in self.restaurants if r.name == restaurant_name), None)
-        if not restaurant or not restaurant.availability:
-            print(f"Restaurant '{restaurant_name}' is not available.")
+        """Place an order"""
+        restaurant = next((r for r in self.restaurants if r.name == restaurant_name and r.availability), None)
+        if not restaurant:
+            print(f"🚫 Restaurant '{restaurant_name}' is not available!")
             return
 
-        # Calculate total price
-        total_price = sum(restaurant.menus.get(item, {}).get('price', 0) * quantity for item, quantity in items.items())
-
-        # Create and save the order
+        total_price = sum(restaurant.menus.get(item, 0) * quantity for item, quantity in items.items())
         order = Order(user_email, restaurant_name, items)
         self.orders.append(order)
-        print(f"Order placed successfully! Total: ${total_price:.2f}")
+        print(f"✅ Order placed successfully! Total: ${total_price:.2f}")
 
     def assign_order_to_driver(self) -> None:
-        """Assign pending orders to available drivers."""
-        # Find a pending order and an available driver
+        """Assign pending orders to available drivers using a round-robin approach"""
         pending_orders = [order for order in self.orders if order.status == "Pending"]
         available_drivers = [driver for driver in self.drivers if driver.available]
 
         if not pending_orders:
-            print("No pending orders.")
-            return
-        if not available_drivers:
-            print("No available drivers.")
+            print("🚫 No pending orders!")
             return
 
-        # Assign the first pending order to the first available driver
-        order = pending_orders[0]
-        driver = available_drivers[0]
-        driver.assign_order(order)
-        print(f"Order for '{order.restaurant_name}' assigned to driver '{driver.name}'.")
+        if not available_drivers:
+            print("🚫 No available drivers!")
+            return
+
+        # Assign orders to drivers in a round-robin fashion
+        for i, order in enumerate(pending_orders):
+            driver = available_drivers[i % len(available_drivers)]
+            driver.assign_order(order)
+            print(f"✅ Order from '{order.restaurant_name}' assigned to driver '{driver.name}'.")
 
     def complete_order(self, driver_email: str) -> None:
-        """Mark an order as completed."""
+        """Complete the last order assigned to a driver"""
         driver = next((d for d in self.drivers if d.email == driver_email), None)
-        if not driver or not driver.orders:
-            print("Driver or current order not found.")
+        if not driver:
+            print(f"🚫 Driver with email {driver_email} not found!")
             return
 
-        # Complete the order
+        if not driver.orders:
+            print(f"🚫 Driver '{driver.name}' has no active orders!")
+            return
+
         driver.complete_order()
+        print(f"✅ Order completed by driver '{driver.name}'.")
+
+        
+
 
 def main():
-    """Main system"""
     admin = Admin()
-    admin.load_data(users_file='users.json', restaurants_file='restaurants.json', 
-                    orders_file='orders.json', drivers_file='drivers.json')  # Load all data
+    
+    # Load data from files at the beginning
+    admin.load_data(user_file='users.json', restaurant_file='restaurants.json', order_file='orders.json', driver_file='driver.json')
 
     while True:
         print("\nMenu:")
@@ -368,105 +497,100 @@ def main():
 
         choice = input("Select an option (1-12): ")
 
-        if choice == '1':  # Register User
+        # User Registration
+        if choice == "1":
             name = input("Enter your name: ")
-            email = input("Enter your email: ")
-            password = input("Enter your password: ")
+            email = input("Enter email: ")
+            password = input("Enter password: ")
             admin.add_user(name, email, password)
 
-        elif choice == '2':  # User Login
-            email = input("Enter your email: ")
-            password = input("Enter your password: ")
+        # User Login
+        elif choice == "2":
+            email = input("Enter email: ")
+            password = input("Enter password: ")
             logged_in_user = User.login(email, password, admin.users)
             if logged_in_user:
-                print(f"Welcome back, {logged_in_user.name}!")
+                print(f"Welcome back, {logged_in_user.name}")
+                
                 while True:
-                    print("\nUser Menu:")
-                    print("1. Place Order")
-                    print("2. View Orders")
+                    print("User menu:")
+                    print("1. Place order")
+                    print("2. View orders")
                     print("3. Logout")
+                    
                     user_choice = input("Select an option (1-3): ")
-
-                    if user_choice == '1':  # Place Order
+                    
+                    if user_choice == "1":
                         restaurant_name = input("Enter restaurant name: ")
-                        items_input = input("Enter items as JSON (e.g., {\"item\": quantity}): ")
-                        items = json.loads(items_input)
-                        admin.place_order(logged_in_user.email, restaurant_name, items)
-
-                    elif user_choice == '2':  # View Orders
+                        items_input = input("Enter items as JSON (e.g: {\"item\":quantity}): ")
+                        try:
+                            items = json.loads(items_input)
+                            admin.place_order(logged_in_user.email, restaurant_name, items)
+                        except json.JSONDecodeError:
+                            print("Invalid JSON format. Please try again.")
+                    
+                    elif user_choice == "2":
                         user_orders = [order for order in admin.orders if order.user_email == logged_in_user.email]
                         if not user_orders:
-                            print("No orders found.")
+                            print("No orders found")
                         else:
                             for order in user_orders:
                                 restaurant = next((r for r in admin.restaurants if r.name == order.restaurant_name), None)
                                 if restaurant:
-                                    order.display_receipt(logged_in_user, restaurant)
-
-                    elif user_choice == '3':  # Logout
+                                    order.display_receipt(logged_in_user.email, restaurant)
+                    
+                    elif user_choice == "3":
                         print("Logging out...")
                         break
-
+                    
                     else:
-                        print("Invalid option. Please try again.")
+                        print("Invalid option. Try again later.")
 
-            else:
-                print("Invalid email or password. Please try again.")
+        # Admin Actions
+        elif choice == "3":
+            print("Listing all users:")
+            admin.list_users()
 
-        elif choice == '3':  # List All Users (Admin Only)
-            print("\nRegistered Users:")
-            if not admin.users:
-                print("No users registered.")
-            else:
-                for user in admin.users:
-                    print(f"Name: {user.name}, Email: {user.email}, Registered At: {user.created_at}")
-
-        elif choice == '4':  # Add Restaurant (Admin Only)
+        elif choice == "4":
             name = input("Enter restaurant name: ")
-            menu_input = input("Enter restaurant menu as JSON (e.g., {\"item\": price}): ")
-            menu = json.loads(menu_input)
-            admin.add_restaurant(name, menu)
+            menus_input = input("Enter menus as JSON (e.g: {\"Dish\": price}): ")
+            try:
+                menus = json.loads(menus_input)
+                admin.add_restaurant(name, menus)
+            except json.JSONDecodeError:
+                print("Invalid menu format. Please try again.")
 
-        elif choice == '5':  # List Restaurants
+        elif choice == "5":
             admin.list_restaurants()
 
-        elif choice == '6':  # Place Order
-            email = input("Enter your email: ")
-            password = input("Enter your password: ")
-            logged_in_user = User.login(email, password, admin.users)
-            if logged_in_user:
-                restaurant_name = input("Enter restaurant name: ")
-                items_input = input("Enter items as JSON (e.g., {\"item\": quantity}): ")
-                items = json.loads(items_input)
-                admin.place_order(logged_in_user.email, restaurant_name, items)
-            else:
-                print("Invalid email or password. Please try again.")
-
-        elif choice == '7':  # Assign Order to Driver (Admin Only)
+        elif choice == "7":
             admin.assign_order_to_driver()
 
-        elif choice == '8':  # Complete Order (Driver Only)
-            driver_email = input("Enter your email: ")
-            admin.complete_order(driver_email)
-
-        elif choice == '9':  # Add Driver (Admin Only)
-            name = input("Enter driver's name: ")
-            email = input("Enter driver's email: ")
+        elif choice == "9":
+            name = input("Enter driver name: ")
+            email = input("Enter driver email: ")
             admin.add_driver(name, email)
 
-        elif choice == '10':  # List Drivers (Admin Only)
+        elif choice == "10":
             admin.list_drivers()
 
-        elif choice == '11':  # Save Data
-            admin.save_data(users_file='users.json', restaurants_file='restaurants.json', 
-                            orders_file='orders.json', drivers_file='drivers.json')
+        # Driver-only Actions
+        elif choice == "8":
+            driver_email = input("Enter driver email: ")
+            admin.complete_order(driver_email)
 
-        elif choice == '12':  # Exit
-            print("Exiting...")
+        # Save Data
+        elif choice == "11":
+            admin.save_data()
+
+        # Exit Program
+        elif choice == "12":
+            print("Exiting the system...")
             break
 
+        # Invalid Option
         else:
-            print("Invalid option. Please try again.")
+            print("Invalid choice. Please select a valid option.")
 
 if __name__ == "__main__":
     main()

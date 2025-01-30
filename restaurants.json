@@ -5,5 +5,19 @@
             "Pizza": 23.33
         },
         "availability": true
+    },
+    {
+        "name": "Bukka hut",
+        "menus": {
+            "Jollof Rice": 240
+        },
+        "availability": true
+    },
+    {
+        "name": "femi cake",
+        "menus": {
+            "Wedding cake": 300
+        },
+        "availability": true
     }
 ]

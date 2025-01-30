@@ -1,1 +1,14 @@
-[]
+[
+    {
+        "name": "Bike man",
+        "email": "bike2gmail.com",
+        "orders": [],
+        "available": true
+    },
+    {
+        "name": "femi",
+        "email": "femi@gmail.com",
+        "orders": [],
+        "available": true
+    }
+]
