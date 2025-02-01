@@ -1,29 +1,12 @@
 [
     {
-        "name": "Pizza hut",
+        "name": "Femi bukka",
         "menus": {
-            "Pizza": 23.33
-        },
-        "availability": true
-    },
-    {
-        "name": "Bukka hut",
-        "menus": {
-            "Jollof Rice": 240
-        },
-        "availability": true
-    },
-    {
-        "name": "femi cake",
-        "menus": {
-            "Wedding cake": 300
-        },
-        "availability": true
-    },
-    {
-        "name": "Mum femi store",
-        "menus": {
-            "Rice": 30
+            "breakfast": {
+                "Pancakes": 3.77,
+                "Coffee": 4.55,
+                "Omelletee": 4.55
+            }
         },
         "availability": true
     }

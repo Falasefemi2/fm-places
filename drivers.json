@@ -1,1 +1,8 @@
-[]
+[
+    {
+        "name": "bikeman",
+        "email": "bikeman@gmail.com",
+        "orders": [],
+        "available": true
+    }
+]
