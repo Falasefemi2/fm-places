@@ -10,5 +10,11 @@
         "email": "ibk@gmail.com",
         "password": "$2b$12$VRn/r0DamQNtNbyH9vz4OeXISpxZwq.CpB0HhG/U65Kunl6M65AZ2",
         "created_at": "2025-02-01T08:16:26.575821"
+    },
+    {
+        "name": "clark kent",
+        "email": "superman@gmail.com",
+        "password": "$2b$12$HBfq304P7TOZVCkUKAUFnO4.JjPgbUqsE/tXyEKZ0gLa0FJ.9JTAi",
+        "created_at": "2025-02-01T08:34:36.708564"
     }
 ]

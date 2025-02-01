@@ -5,6 +5,7 @@ from datetime import datetime
 
 
 class User:
+    """User Registration and Authentication"""
     def __init__(self, name: str, email: str, password: str, hashed: bool = False) -> None:
         self.name = name
         self.email = email
@@ -319,7 +320,8 @@ class Driver:
 
 
 class Admin:
-    def _init_(self) -> None:
+    """Admin panel for managing users, restaurants, orders, and drivers"""
+    def __init__(self) -> None:
         self.restaurants: List[Restaurant] = []
         self.users: List[User] = []
         self.orders: List[Order] = []
@@ -494,6 +496,8 @@ class Admin:
 
 
 def main():
+    """_main system_
+    """
     admin = Admin()
 
     # Load data from files at the beginning.

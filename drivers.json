@@ -4,5 +4,11 @@
         "email": "bikeman@gmail.com",
         "orders": [],
         "available": true
+    },
+    {
+        "name": "Sule",
+        "email": "sule@gmail.com",
+        "orders": [],
+        "available": true
     }
 ]

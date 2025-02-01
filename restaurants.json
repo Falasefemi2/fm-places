@@ -9,5 +9,15 @@
             }
         },
         "availability": true
+    },
+    {
+        "name": "Pizza joint",
+        "menus": {
+            "breakfast": {
+                "Pizza": 4.55,
+                "Burger": 5.66
+            }
+        },
+        "availability": true
     }
 ]
