@@ -43,8 +43,8 @@ Installation
     bash
     Copy
 
-    git clone https://github.com/your-username/food-delivery-system.git
-    cd food-delivery-system
+    git clone https://github.com/Falasefemi2/fm-places
+    cd fm-places
 
     Run the program:
     bash
